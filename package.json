@@ -1,0 +1,19 @@
+{
+  "name": "meccha-chameleon-server",
+  "version": "1.0.0",
+  "description": "Scalable authoritative multiplayer server for MECCHA CHAMELEON — a paint-and-hide party game. WebSocket presence, server-owned round loop, server-relayed voice, multi-room matchmaking.",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test --test-reporter=spec test/round.test.mjs test/protocol.test.mjs",
+    "loadtest": "node test/loadtest.mjs"
+  },
+  "keywords": ["multiplayer", "websocket", "game-server", "authoritative", "voice", "meccha-chameleon"],
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
