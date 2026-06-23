@@ -28,7 +28,7 @@ export const config = {
   // LOBBY = pregame warm-up (roam + chat + paint yourself, no seekers/hunting).
   phase: {
     LOBBY: ms(num(process.env.PHASE_LOBBY_MS, 120000)),
-    PREP: ms(num(process.env.PHASE_PREP_MS, 30000)),
+    PREP: ms(num(process.env.PHASE_PREP_MS, 90000)), // 90s grace period (hiders hide; seeker held in lobby)
     HUNT: ms(num(process.env.PHASE_HUNT_MS, 90000)),
     RESULTS: ms(num(process.env.PHASE_RESULTS_MS, 8000)),
   },
