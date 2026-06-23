@@ -32,10 +32,15 @@ export const config = {
     HUNT: ms(num(process.env.PHASE_HUNT_MS, 90000)),
     RESULTS: ms(num(process.env.PHASE_RESULTS_MS, 8000)),
   },
+  // need at least this many non-spectator players to START a round; below it a room
+  // stays in LOBBY (a lone player must never sit through a seeker-less HUNT).
+  minPlayers: num(process.env.MIN_PLAYERS, 2),
   seekerPer: num(process.env.SEEKER_PER, 4), // ~1 seeker per N players
   tagRadius: num(process.env.TAG_RADIUS, 2.8),
   shootRange: num(process.env.SHOOT_RANGE, 50), // 3D range a seeker's gun can hit a hider
   arenaBound: num(process.env.ARENA_BOUND, 80),
+  yClamp: num(process.env.Y_CLAMP, 200), // vertical clamp on client-reported positions
+  phaseFallbackMs: num(process.env.PHASE_FALLBACK_MS, 10000), // duration for an unknown phase
   footstepMinMs: num(process.env.FOOTSTEP_MIN_MS, 150), // per-player cap on relayed footsteps
   whistleMs: ms(num(process.env.WHISTLE_MS, 40000)), // HUNT: spatial whistle hint cadence
 
@@ -43,6 +48,8 @@ export const config = {
   msgMaxPerSec: num(process.env.MSG_MAX_PER_SEC, 80),
   paintMaxPerSec: num(process.env.PAINT_MAX_PER_SEC, 4),
   paintMaxLen: num(process.env.PAINT_MAX_LEN, 120000),
+  chatMaxPerSec: num(process.env.CHAT_MAX_PER_SEC, 3), // per-player chat broadcast cap
+  profileBroadcastMs: num(process.env.PROFILE_BROADCAST_MS, 1500), // throttle room-wide rename
 
   // voice relay
   voice: {

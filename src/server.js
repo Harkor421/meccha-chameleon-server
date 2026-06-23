@@ -77,7 +77,7 @@ export class GameServer {
       rl: rateLimiter(config.msgMaxPerSec),
       vrl: rateLimiter(config.voice.maxPerSec),
       prl: rateLimiter(config.paintMaxPerSec),
-      chatRl: rateLimiter(3),
+      chatRl: rateLimiter(config.chatMaxPerSec),
       lastVoiceAt: 0, lastProfileAt: 0,
     }
     this.keys.set(key, ws)
