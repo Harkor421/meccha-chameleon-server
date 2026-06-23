@@ -14,6 +14,10 @@ export const S = {
   PHASE: 'phase',         // { phase, deadline, roles, result }
   PEER_PAINT: 'peerPaint', // { id, tex }
   TAGGED: 'tagged',       // { id }
+  SHOT: 'shot',           // { id, x, y, z }  (positional gunshot SFX for hit OR miss)
+  FOOTSTEP: 'footstep',   // { id, x, y, z, run }  (positional footstep SFX so peers hear you move)
+  REVEAL: 'reveal',       // { id, x, y, z }  (anti-mesh-clip give-away: positional whistle at the buried player)
+  WHISTLE: 'whistle',     // {}  (HUNT hint: seekers play a spatial whistle at each hider)
   CHAT: 'chat',           // { id, name, text }
   SERVER_FULL: 'serverFull',
   PONG: 'pong',           // { t0 }
@@ -22,12 +26,17 @@ export const S = {
 // client → server
 export const C = {
   SET_PROFILE: 'setProfile', // { name }
-  STATE: 'state',            // { x, y, z, ry, anim }
+  STATE: 'state',            // { x, y, z, ry, anim, q }  (q = optional orientation quaternion)
   PAINT: 'paint',            // { tex }  (one-shot data:image/* dataURL at lock-in)
   TAG: 'tag',                // { target }
+  SHOOT: 'shoot',            // { target }  (seeker fires; server relays SFX + validates range)
+  SPECTATE: 'spectate',      // { on }  (sit out of the match / rejoin)
   CHAT: 'chat',              // { text }
   PING: 'ping',              // { t0 }
+  START_MATCH: 'startMatch', // {}  (skip the lobby countdown: LOBBY/RESULTS → fresh PREP)
+  FOOTSTEP: 'footstep',      // { run }  (walk vs run; server attaches the sender's position)
+  REVEAL: 'reveal',          // {}  (self-report buried in geometry; server broadcasts your position)
 }
 
-export const PHASES = ['PREP', 'HUNT', 'RESULTS']
-export const ROLES = { HIDER: 'hider', SEEKER: 'seeker', OUT: 'out' }
+export const PHASES = ['LOBBY', 'PREP', 'HUNT', 'RESULTS']
+export const ROLES = { HIDER: 'hider', SEEKER: 'seeker', OUT: 'out', SPECTATOR: 'spectator' }

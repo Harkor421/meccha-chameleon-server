@@ -5,14 +5,19 @@ import { RoundController } from '../src/round.js'
 // Unit tests for the authoritative round logic with a fake room (no sockets).
 function fakeRoom(entries) {
   const clients = new Map(entries)
-  return {
+  // give each client its id so shoot()/broadcast can reference it
+  for (const [id, c] of clients) c.id = id
+  const room = {
     clients,
-    broadcast() {},
+    sent: [],
+    broadcast(obj) { this.sent.push(obj) },
+    clearPersistedTex() {},
     isEmpty() { return clients.size === 0 },
     rolesMap() { const m = {}; for (const [id, c] of clients) m[id] = c.role; return m },
   }
+  return room
 }
-const mk = (role = 'hider', x = 0, z = 0) => ({ role, state: { x, y: 0, z } })
+const mk = (role = 'hider', x = 0, z = 0, y = 0) => ({ role, spectator: false, state: { x, y, z } })
 
 test('assignRoles: ~1 seeker per 4 players, min 1 once there are >=2', () => {
   for (const n of [2, 3, 4, 5, 8, 12]) {
@@ -45,6 +50,52 @@ test('tag: only a seeker, in range, during HUNT, against a hider', () => {
   assert.equal(rc.tag(seeker, 'n'), true, 'in range lands')
   assert.equal(near.role, 'out')
   assert.equal(rc.tag(seeker, 'n'), false, 'cannot re-tag someone already out')
+})
+
+test('assignRoles: spectators never get hider/seeker and stay spectator', () => {
+  const a = mk(); const b = mk(); const c = mk(); const spec = mk()
+  spec.spectator = true
+  const room = fakeRoom([['a', a], ['b', b], ['c', c], ['spec', spec]])
+  new RoundController(room).assignRoles()
+  assert.equal(spec.role, 'spectator', 'spectator is left out of the deal')
+  const playing = [a, b, c]
+  assert.ok(playing.some((p) => p.role === 'seeker'), 'a seeker is dealt among the 3 players')
+  assert.ok(playing.every((p) => p.role === 'seeker' || p.role === 'hider'), 'players are only hider/seeker')
+})
+
+test('shoot: only a seeker, during HUNT, validates 3D range, relays the SFX', () => {
+  const seeker = mk('seeker', 0, 0, 0)
+  const near = mk('hider', 3, 0, 2)    // within shootRange (50)
+  const far = mk('hider', 0, 0, 0)     // out of range via Y axis
+  far.state.y = 999
+  const room = fakeRoom([['s', seeker], ['n', near], ['f', far]])
+  const rc = new RoundController(room)
+
+  rc.phase = 'PREP'
+  assert.equal(rc.shoot(seeker, 'n'), false, 'no shooting outside HUNT')
+  rc.phase = 'HUNT'
+  assert.equal(rc.shoot(near, 'f'), false, 'a hider cannot shoot')
+
+  room.sent.length = 0
+  assert.equal(rc.shoot(seeker, 'f'), false, 'out of (3D) range is rejected')
+  assert.ok(room.sent.some((m) => m.t === 'shot' && m.id === 's'), 'a miss still relays the gunshot SFX')
+
+  room.sent.length = 0
+  assert.equal(rc.shoot(seeker, 'n'), true, 'in range downs the hider')
+  assert.equal(near.role, 'out')
+  assert.ok(room.sent.some((m) => m.t === 'shot'), 'a hit relays the gunshot SFX')
+  assert.ok(room.sent.some((m) => m.t === 'tagged' && m.id === 'n'), 'a hit broadcasts tagged')
+})
+
+test('shoot: downing the last hider ends the hunt (seekers win)', () => {
+  const seeker = mk('seeker', 0, 0, 0)
+  const h1 = mk('hider', 1, 0, 0)
+  const room = fakeRoom([['s', seeker], ['h1', h1]])
+  const rc = new RoundController(room)
+  rc.phase = 'HUNT'
+  rc.shoot(seeker, 'h1')
+  assert.equal(rc.phase, 'RESULTS')
+  assert.equal(rc.result, 'seekers')
 })
 
 test('win: hiders win if any survive; seekers win when all hiders are tagged', () => {

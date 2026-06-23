@@ -74,19 +74,23 @@ Connect: `wss://host/?name=<name>&key=<persistent-secret>&room=<optional CODE>`.
 JSON messages are `{ t, ... }`. **Voice is binary**: client → server uploads a raw Opus
 packet; server → others sends `[u8 idLen][id ascii][opus]`.
 
-**Client → server:** `setProfile{name}` · `state{x,y,z,ry,anim}` · `paint{tex}` ·
-`tag{target}` · `chat{text}` · `ping{t0}` · *(binary)* voice.
+**Client → server:** `setProfile{name}` · `state{x,y,z,ry,anim,q?}` · `paint{tex}` ·
+`tag{target}` · `shoot{target}` · `spectate{on}` · `chat{text}` · `ping{t0}` · *(binary)* voice.
 **Server → client:** `welcome{id,room,spawn,peers,phase}` · `state{peers}` ·
 `peer_join` · `peer_leave` · `phase{phase,deadline,roles,result}` · `peerPaint{id,tex}` ·
-`tagged{id}` · `chat` · `serverFull` · `pong` · *(binary)* voice.
+`tagged{id}` · `shot{id,x,y,z}` · `chat` · `serverFull` · `pong` · *(binary)* voice.
 
 See [`src/protocol.js`](src/protocol.js) for the authoritative list.
 
 ## Round flow
 `PREP` (paint & hide) → `HUNT` (seekers tag hiders) → `RESULTS` (reveal) → loop.
-Roles are assigned each PREP (~1 seeker per `SEEKER_PER` players). A tag is accepted
-only if the sender is a live seeker, in HUNT, within `TAG_RADIUS` of a live hider
-(server-checked). Hiders win if any survive the timer; seekers win if all are tagged.
+Roles are assigned each PREP (~1 seeker per `SEEKER_PER` players); spectators sit out
+and are never dealt a role. A tag is accepted only if the sender is a live seeker, in
+HUNT, within `TAG_RADIUS` of a live hider; a `shoot` is the ranged version, validated
+in 3D within `SHOOT_RANGE` and relayed to peers as a positional `shot` SFX (hit or
+miss). All checks are server-side. A player's painted body and spectator choice are
+persisted by identity, so a refresh/reconnect restores them. Hiders win if any survive
+the timer; seekers win if all are tagged.
 
 ## Deploy
 - **Docker:** `docker build -t mc-server . && docker run -p 8787:8787 mc-server`
