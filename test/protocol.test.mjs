@@ -7,6 +7,9 @@ import { WebSocket } from 'ws'
 process.env.PORT = process.env.TEST_PORT || '8799'
 process.env.HOST = '127.0.0.1'
 process.env.MC_TIME_SCALE = '0.1'
+// short, explicit phase durations so a round can be driven through PREP→HUNT in a test
+process.env.PHASE_PREP_MS = process.env.PHASE_PREP_MS || '1000'
+process.env.PHASE_HUNT_MS = process.env.PHASE_HUNT_MS || '20000'
 process.env.LOG_LEVEL = 'warn'
 const { GameServer } = await import('../src/server.js')
 
@@ -160,6 +163,85 @@ test('persistence: a reconnecting hider keeps their painted body', async () => {
   const peer = wc.peers[w2.id]
   assert.ok(peer && peer.tex === tex, 'reconnected hider\'s painted body is restored for peers')
   a.close(); b.close(); a2.close(); c.close()
+})
+
+// --- FIX 3: HOST is assigned + carried in welcome/phase ------------------------
+test('host: the first player to join is the room host (in welcome.phase + phase msgs)', async () => {
+  const a = connect('Ha', 'HOST1'); await a.open(); const wa = await a.waitFor((m) => m.t === 'welcome')
+  assert.equal(wa.phase.host, wa.id, 'the first player is the host in their welcome')
+  const b = connect('Hb', 'HOST1'); await b.open(); const wb = await b.waitFor((m) => m.t === 'welcome')
+  assert.equal(wb.phase.host, wa.id, 'a later joiner sees the existing host')
+  // B also receives a phase broadcast naming the host
+  const ph = await b.waitFor((m) => m.t === 'phase')
+  assert.equal(ph.host, wa.id, 'phase messages carry the host id')
+  a.close(); b.close()
+})
+
+test('host: when the host leaves, the host is handed off to a remaining player', async () => {
+  const a = connect('Hc', 'HOST2'); await a.open(); const wa = await a.waitFor((m) => m.t === 'welcome')
+  const b = connect('Hd', 'HOST2'); await b.open(); const wb = await b.waitFor((m) => m.t === 'welcome')
+  assert.equal(wb.phase.host, wa.id)
+  a.close() // host leaves
+  const ph = await b.waitFor((m) => m.t === 'phase' && m.host === wb.id)
+  assert.equal(ph.host, wb.id, 'the remaining player becomes the host')
+  b.close()
+})
+
+// --- FIX 2/3: only the HOST may start, and only with >= minPlayers -------------
+test('startMatch: a non-host start is ignored; the host start (>=2 players) enters PREP', async () => {
+  const a = connect('Sma', 'START1'); await a.open(); const wa = await a.waitFor((m) => m.t === 'welcome')
+  const b = connect('Smb', 'START1'); await b.open(); const wb = await b.waitFor((m) => m.t === 'welcome')
+  assert.equal(wa.phase.host, wa.id, 'A is the host')
+  // a non-host (B) asking to start is ignored
+  b.send({ t: 'startMatch' })
+  let leaked = false
+  try { await a.waitFor((m) => m.t === 'phase' && m.phase === 'PREP', 700); leaked = true } catch {}
+  assert.equal(leaked, false, 'a non-host cannot start the match')
+  // the host can start
+  a.send({ t: 'startMatch' })
+  const ph = await b.waitFor((m) => m.t === 'phase' && m.phase === 'PREP')
+  assert.equal(ph.phase, 'PREP', 'the host starts a fresh PREP')
+  a.close(); b.close()
+})
+
+test('startMatch: a lone host cannot start (min-players gate)', async () => {
+  const a = connect('Lone', 'START2'); await a.open(); const wa = await a.waitFor((m) => m.t === 'welcome')
+  assert.equal(wa.phase.host, wa.id)
+  assert.equal(wa.phase.phase, 'LOBBY')
+  a.send({ t: 'startMatch' }) // only 1 live player → gated
+  let leaked = false
+  try { await a.waitFor((m) => m.t === 'phase' && m.phase === 'PREP', 700); leaked = true } catch {}
+  assert.equal(leaked, false, 'a single player never enters PREP')
+  a.close()
+})
+
+// --- FIX 5: clearPaint is broadcast at the start of a fresh round --------------
+test('clearPaint: starting a round broadcasts clearPaint to the room', async () => {
+  const a = connect('Ca', 'CLEAR1'); await a.open(); const wa = await a.waitFor((m) => m.t === 'welcome')
+  const b = connect('Cb', 'CLEAR1'); await b.open(); await b.waitFor((m) => m.t === 'welcome')
+  assert.equal(wa.phase.host, wa.id)
+  a.send({ t: 'startMatch' }) // host starts → enter PREP → clearPaint broadcast
+  const cp = await b.waitFor((m) => m.t === 'clearPaint')
+  assert.ok(cp, 'every client is told to wipe synced paint for the fresh round')
+  a.close(); b.close()
+})
+
+// --- FIX 4: a mid-round (HUNT) joiner gets the WAITING role, not eliminated ----
+test('waiting: a player joining mid-HUNT is WAITING (not out), folded in next PREP', async () => {
+  const a = connect('Wa', 'WAIT1'); await a.open(); const wa = await a.waitFor((m) => m.t === 'welcome')
+  const b = connect('Wb', 'WAIT1'); await b.open(); await b.waitFor((m) => m.t === 'welcome')
+  assert.equal(wa.phase.host, wa.id, 'A is the host')
+  a.send({ t: 'startMatch' }) // LOBBY → PREP
+  await a.waitFor((m) => m.t === 'phase' && m.phase === 'HUNT', 6000) // PREP auto-advances to HUNT
+  // a third player joins mid-HUNT → WAITING (invisible on the client, not 'out'/eliminated)
+  const c = connect('Wc', 'WAIT1'); await c.open(); const wc = await c.waitFor((m) => m.t === 'welcome')
+  assert.equal(wc.phase.roles[wc.id], 'waiting', 'a mid-HUNT joiner is WAITING, not out')
+  // HUNT auto-advances to RESULTS; the host then starts the next round
+  await c.waitFor((m) => m.t === 'phase' && m.phase === 'RESULTS', 8000)
+  a.send({ t: 'startMatch' }) // RESULTS → fresh PREP
+  const ph = await c.waitFor((m) => m.t === 'phase' && m.phase === 'PREP', 6000)
+  assert.ok(['hider', 'seeker'].includes(ph.roles[wc.id]), 'the waiting player becomes hider/seeker next PREP')
+  a.close(); b.close(); c.close()
 })
 
 test('rooms are isolated by code (no cross-room leakage)', async () => {

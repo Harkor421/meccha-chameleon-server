@@ -7,12 +7,13 @@
 
 // server → client
 export const S = {
-  WELCOME: 'welcome',     // { id, room, spawn, peers:{id:{x,y,z,ry,anim,name,role,tex}}, phase:{phase,deadline,roles,result} }
+  WELCOME: 'welcome',     // { id, room, spawn, peers:{id:{x,y,z,ry,anim,name,role,tex}}, phase:{phase,deadline,roles,result,host} }
   STATE: 'state',         // { peers:{id:{x,y,z,ry,anim}} }  (positions only, 20Hz)
   PEER_JOIN: 'peer_join', // { id, name, role, state }
   PEER_LEAVE: 'peer_leave', // { id }
-  PHASE: 'phase',         // { phase, deadline, roles, result }
+  PHASE: 'phase',         // { phase, deadline, roles, result, host }  (host = id of the player allowed to start matches)
   PEER_PAINT: 'peerPaint', // { id, tex }
+  CLEAR_PAINT: 'clearPaint', // {}  (fresh round: wipe every peer's synced painted body)
   TAGGED: 'tagged',       // { id }
   SHOT: 'shot',           // { id, x, y, z }  (positional gunshot SFX for hit OR miss)
   FOOTSTEP: 'footstep',   // { id, x, y, z, run }  (positional footstep SFX so peers hear you move)
@@ -39,4 +40,6 @@ export const C = {
 }
 
 export const PHASES = ['LOBBY', 'PREP', 'HUNT', 'RESULTS']
-export const ROLES = { HIDER: 'hider', SEEKER: 'seeker', OUT: 'out', SPECTATOR: 'spectator' }
+// Roles. WAITING = joined mid-round (HUNT/RESULTS); not eliminated (OUT) — folded into
+// the next PREP by assignRoles. The client renders WAITING (like SPECTATOR) as invisible.
+export const ROLES = { HIDER: 'hider', SEEKER: 'seeker', OUT: 'out', WAITING: 'waiting', SPECTATOR: 'spectator' }

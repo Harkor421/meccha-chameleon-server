@@ -1,15 +1,20 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { RoundController } from '../src/round.js'
+process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'warn' // keep round logs out of the test output
+const { RoundController } = await import('../src/round.js')
 
 // Unit tests for the authoritative round logic with a fake room (no sockets).
+// Mirrors the real Room contract the RoundController depends on.
 function fakeRoom(entries) {
   const clients = new Map(entries)
   // give each client its id so shoot()/broadcast can reference it
   for (const [id, c] of clients) c.id = id
   const room = {
+    code: 'TEST',
     clients,
+    hostId: clients.size ? [...clients.keys()][0] : null,
     sent: [],
+    size() { return clients.size },
     broadcast(obj) { this.sent.push(obj) },
     clearPersistedTex() {},
     isEmpty() { return clients.size === 0 },
@@ -112,4 +117,78 @@ test('win: hiders win if any survive; seekers win when all hiders are tagged', (
   rc.tag(seeker, 'h1') // last hider caught → endHuntIfDone → RESULTS
   assert.equal(rc.phase, 'RESULTS')
   assert.equal(rc.result, 'seekers')
+})
+
+// --- FIX 1: STUCK HUNT (ends both ways) ----------------------------------------
+test('endHuntIfDone: all hiders caught → seekers win', () => {
+  const seeker = mk('seeker', 0, 0)
+  const h1 = mk('out', 1, 0) // already tagged out
+  const room = fakeRoom([['s', seeker], ['h1', h1]])
+  const rc = new RoundController(room)
+  rc.phase = 'HUNT'
+  rc.endHuntIfDone()
+  assert.equal(rc.phase, 'RESULTS')
+  assert.equal(rc.result, 'seekers', 'no hiders remain → seekers win')
+})
+
+test('endHuntIfDone: no live seekers left (all disconnected) → hiders win', () => {
+  // a hider remains but every seeker is gone (the seeker was removed from the room)
+  const h1 = mk('hider', 1, 0)
+  const room = fakeRoom([['h1', h1]])
+  const rc = new RoundController(room)
+  rc.phase = 'HUNT'
+  rc.endHuntIfDone()
+  assert.equal(rc.phase, 'RESULTS', 'no seekers → the stuck hunt ends')
+  assert.equal(rc.result, 'hiders', 'surviving hider → hiders win')
+})
+
+test('endHuntIfDone: with both a live hider AND seeker, HUNT keeps running', () => {
+  const seeker = mk('seeker', 0, 0)
+  const h1 = mk('hider', 1, 0)
+  const room = fakeRoom([['s', seeker], ['h1', h1]])
+  const rc = new RoundController(room)
+  rc.phase = 'HUNT'
+  rc.endHuntIfDone()
+  assert.equal(rc.phase, 'HUNT', 'a normal hunt is not ended early')
+})
+
+// --- FIX 2: MIN-PLAYERS GATE ---------------------------------------------------
+test('advance: a lone player never enters PREP (stays warming up in LOBBY)', () => {
+  const room = fakeRoom([['solo', mk()]])
+  const rc = new RoundController(room)
+  rc.phase = 'LOBBY'
+  rc.deadline = Date.now() - 1 // deadline already passed
+  rc.advance(Date.now())
+  assert.equal(rc.phase, 'LOBBY', 'too few players → no PREP')
+  assert.ok(rc.deadline > Date.now(), 'LOBBY deadline is pushed back')
+})
+
+test('advance: with >= minPlayers the LOBBY advances to PREP', () => {
+  const room = fakeRoom([['a', mk()], ['b', mk()]])
+  const rc = new RoundController(room)
+  rc.phase = 'LOBBY'
+  rc.deadline = Date.now() - 1
+  rc.advance(Date.now())
+  assert.equal(rc.phase, 'PREP', '>= 2 players → start the round')
+})
+
+test('startMatch: gated on minPlayers, only from LOBBY/RESULTS', () => {
+  const solo = fakeRoom([['solo', mk()]])
+  const rcSolo = new RoundController(solo)
+  assert.equal(rcSolo.startMatch(), false, 'a lone host cannot start')
+  assert.equal(rcSolo.phase, 'LOBBY')
+
+  const duo = fakeRoom([['a', mk()], ['b', mk()]])
+  const rc = new RoundController(duo)
+  assert.equal(rc.startMatch(), true, 'two players can start')
+  assert.equal(rc.phase, 'PREP')
+  assert.equal(rc.startMatch(), false, 'cannot restart a live PREP')
+})
+
+// --- FIX 4: WAITING role folds in at the next PREP -----------------------------
+test('assignRoles: a WAITING (mid-round joiner) is dealt a real role', () => {
+  const a = mk('hider'); const b = mk('seeker'); const late = mk('waiting')
+  const room = fakeRoom([['a', a], ['b', b], ['late', late]])
+  new RoundController(room).assignRoles()
+  assert.ok(['hider', 'seeker'].includes(late.role), 'the latecomer is folded into the deal')
 })
