@@ -11,6 +11,7 @@ export const counters = {
   voice_packets_relayed_total: 0,
   paint_syncs_total: 0,
   tags_total: 0,
+  shots_total: 0,
   rejected_full_total: 0,
 }
 export const inc = (k, n = 1) => { counters[k] = (counters[k] || 0) + n }

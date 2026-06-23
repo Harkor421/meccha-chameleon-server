@@ -51,7 +51,10 @@ export class RoomManager {
     const presenceMs = Math.max(10, Math.round(1000 / config.tickHz))
     this._timers.push(setInterval(() => { for (const r of this.rooms.values()) r.tickPresence() }, presenceMs))
     this._timers.push(setInterval(() => { const now = Date.now(); for (const r of this.rooms.values()) r.round.advance(now) }, 250))
-    this._timers.push(setInterval(() => { for (const r of this.rooms.values()) r.round.broadcastPhase() }, 1000))
+    this._timers.push(setInterval(() => {
+      const now = Date.now()
+      for (const r of this.rooms.values()) { r.round.broadcastPhase(); r.round.tickWhistle(now) }
+    }, 1000))
     this._timers.push(setInterval(() => this.reap(), 5000))
   }
 

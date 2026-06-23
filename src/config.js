@@ -25,14 +25,19 @@ export const config = {
   maxWsBuffered: num(process.env.MAX_WS_BUFFERED, 1 << 20), // skip non-critical sends past this backpressure
 
   // round
+  // LOBBY = pregame warm-up (roam + chat + paint yourself, no seekers/hunting).
   phase: {
+    LOBBY: ms(num(process.env.PHASE_LOBBY_MS, 120000)),
     PREP: ms(num(process.env.PHASE_PREP_MS, 30000)),
     HUNT: ms(num(process.env.PHASE_HUNT_MS, 90000)),
     RESULTS: ms(num(process.env.PHASE_RESULTS_MS, 8000)),
   },
   seekerPer: num(process.env.SEEKER_PER, 4), // ~1 seeker per N players
   tagRadius: num(process.env.TAG_RADIUS, 2.8),
+  shootRange: num(process.env.SHOOT_RANGE, 50), // 3D range a seeker's gun can hit a hider
   arenaBound: num(process.env.ARENA_BOUND, 80),
+  footstepMinMs: num(process.env.FOOTSTEP_MIN_MS, 150), // per-player cap on relayed footsteps
+  whistleMs: ms(num(process.env.WHISTLE_MS, 40000)), // HUNT: spatial whistle hint cadence
 
   // anti-abuse
   msgMaxPerSec: num(process.env.MSG_MAX_PER_SEC, 80),
