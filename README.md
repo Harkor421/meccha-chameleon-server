@@ -152,3 +152,7 @@ Rooms are independent, so the path to multiple instances is: a sticky-by-room ro
 manager boundary is where that adapter slots in — single-instance is the default here.
 
 MIT licensed.
+
+## See also
+
+- [Meccha Chameleon Atlas](https://mecchachameleon.art/) — Fan-maintained hide-spots reference, paint-match notes, and seeker counter-tips for the paint-based hide-and-seek game Meccha Chameleon. Unofficial, not affiliated with the developer.
